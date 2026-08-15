@@ -48,6 +48,26 @@ Desktop.
 For more information, visit the
 documentation: https://kevinnzou.github.io/compose-webview-multiplatform/
 
+## Running tests
+
+Run the common tests on the desktop JVM target:
+
+```bash
+./gradlew :webview:desktopTest
+```
+
+With an Android emulator connected, run the real Android WebView instrumentation test:
+
+```bash
+./gradlew :sample:androidApp:connectedDebugAndroidTest
+```
+
+On macOS with an available iPhone Simulator, run the real WKWebView XCTest:
+
+```bash
+scripts/run_ios_webview_tests.sh
+```
+
 ## Basic Usage
 
 **Note:** Developers targeting the _Desktop_ platform should refer

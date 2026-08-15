@@ -12,6 +12,9 @@ sample/iosApp/Pods/*
 sample/iosApp/iosApp.xcworkspace/*
 sample/iosApp/iosApp.xcodeproj/*
 !sample/iosApp/iosApp.xcodeproj/project.pbxproj
+!sample/iosApp/iosApp.xcodeproj/xcshareddata/
+!sample/iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/
+!sample/iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/*.xcscheme
 webview/webview.podspec
 /convention-plugins/
 keySec.gpg

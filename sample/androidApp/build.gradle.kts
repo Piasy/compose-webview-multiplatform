@@ -11,6 +11,11 @@ kotlin {
         androidMain.dependencies {
             implementation(project(":sample:shared"))
         }
+        androidInstrumentedTest.dependencies {
+            implementation(libs.androidx.test.ext.junit)
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.compose.ui.test.junit4)
+        }
     }
 }
 
@@ -26,6 +31,10 @@ android {
         targetSdk = (findProperty("android.targetSdk") as String).toInt()
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    dependencies {
+        debugImplementation(libs.androidx.compose.ui.test.manifest)
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
