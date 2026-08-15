@@ -87,6 +87,10 @@ WebView(state)
 
 This will display a WebView in your Compose layout that shows the URL provided.
 
+Android and iOS can also serve a main document and all of its subresources through a common
+suspend custom-scheme handler. See [Custom scheme handlers](docs/scheme-handler.md) for the API,
+validation rules, scheduling behavior, observer lifecycle, and platform limitations.
+
 ## WebView State
 
 This library provides a *WebViewState* class as a state holder to hold the state for the WebView.

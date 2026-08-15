@@ -7,6 +7,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.multiplatform.webview.jsbridge.ConsoleBridge
 import com.multiplatform.webview.jsbridge.WebViewJsBridge
+import com.multiplatform.webview.request.AndroidWebViewSchemeAdapter
+import com.multiplatform.webview.request.AndroidWebViewSchemeClient
+import com.multiplatform.webview.request.WebViewSchemeConfig
 
 /**
  * Android WebView implementation.
@@ -23,7 +26,16 @@ actual fun ActualWebView(
     onDispose: (NativeWebView) -> Unit,
     platformWebViewParams: PlatformWebViewParams?,
     factory: (WebViewFactoryParam) -> NativeWebView,
+    schemeConfig: WebViewSchemeConfig?,
 ) {
+    require(schemeConfig == null || platformWebViewParams?.client == null) {
+        "A custom Android WebViewClient cannot be used together with WebViewSchemeConfig"
+    }
+    val schemeAdapter = schemeConfig?.let { remember { AndroidWebViewSchemeAdapter(it) } }
+    val client =
+        schemeAdapter?.let { remember { AndroidWebViewSchemeClient(it) } }
+            ?: platformWebViewParams?.client
+            ?: remember { AccompanistWebViewClient() }
     AccompanistWebView(
         state,
         modifier,
@@ -31,9 +43,15 @@ actual fun ActualWebView(
         navigator,
         webViewJsBridge,
         consoleBridge,
-        onCreated = onCreated,
-        onDispose = onDispose,
-        client = platformWebViewParams?.client ?: remember { AccompanistWebViewClient() },
+        onCreated = { webView ->
+            schemeAdapter?.installFetchBridge(webView)
+            onCreated(webView)
+        },
+        onDispose = { webView ->
+            schemeAdapter?.close()
+            onDispose(webView)
+        },
+        client = client,
         chromeClient =
             platformWebViewParams?.chromeClient ?: remember { AccompanistWebChromeClient() },
         factory = { factory(WebViewFactoryParam(it)) },

@@ -6,6 +6,12 @@ import com.kevinnzou.sample.integrationtest.REAL_WEB_VIEW_SMOKE_EXPECTED_PROBE
 import com.kevinnzou.sample.integrationtest.REAL_WEB_VIEW_SMOKE_TITLE
 import com.kevinnzou.sample.integrationtest.RealWebViewSmokeHarness
 import com.kevinnzou.sample.integrationtest.RealWebViewSmokeSnapshot
+import com.kevinnzou.sample.integrationtest.SCHEME_WEB_VIEW_SMOKE_EXPECTED_PROBE
+import com.kevinnzou.sample.integrationtest.SCHEME_WEB_VIEW_SMOKE_TITLE
+import com.kevinnzou.sample.integrationtest.SchemeCancellationHarness
+import com.kevinnzou.sample.integrationtest.SchemeCancellationSnapshot
+import com.kevinnzou.sample.integrationtest.SchemeWebViewSmokeHarness
+import com.kevinnzou.sample.integrationtest.SchemeWebViewSmokeSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +31,62 @@ class RealWebViewSmokeTest {
         val ready = awaitReadySnapshot(snapshots, minimumLoadCount = 1)
 
         assertReadySnapshot(ready)
+    }
+
+    @Test
+    fun testRealWebViewLoadsCustomSchemeNavigationAndSubresources() {
+        val snapshots = LinkedBlockingQueue<SchemeWebViewSmokeSnapshot>()
+        activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                SchemeWebViewSmokeHarness(onSnapshot = snapshots::offer)
+            }
+        }
+
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
+        var latest: SchemeWebViewSmokeSnapshot? = null
+        while (System.nanoTime() < deadline) {
+            val current = snapshots.poll(deadline - System.nanoTime(), TimeUnit.NANOSECONDS) ?: break
+            latest = current
+            if (normalizeProbe(current.jsProbeResult) == SCHEME_WEB_VIEW_SMOKE_EXPECTED_PROBE) {
+                break
+            }
+        }
+        val snapshot = requireNotNull(latest)
+        val diagnostic = snapshot.toString()
+        assertEquals(diagnostic, "Finished", snapshot.loadingState)
+        assertEquals(diagnostic, SCHEME_WEB_VIEW_SMOKE_TITLE, snapshot.pageTitle)
+        assertEquals(diagnostic, SCHEME_WEB_VIEW_SMOKE_EXPECTED_PROBE, normalizeProbe(snapshot.jsProbeResult))
+        assertTrue(diagnostic, snapshot.errorsForCurrentRequest.isEmpty())
+        assertTrue(diagnostic, snapshot.requestUrls.contains("cwmtest://host/index.html?source=smoke"))
+        assertTrue(diagnostic, snapshot.requestUrls.any { it.endsWith("/fetch?source=js") })
+        assertTrue(diagnostic, snapshot.requestMethods.contains("HEAD"))
+        assertTrue(diagnostic, snapshot.completedStatuses.contains(404))
+    }
+
+    @Test
+    fun testDisposingWebViewCancelsRunningSchemeRequestExactlyOnce() {
+        val snapshots = LinkedBlockingQueue<SchemeCancellationSnapshot>()
+        activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                SchemeCancellationHarness(onSnapshot = snapshots::offer)
+            }
+        }
+        val received = snapshots.poll(10, TimeUnit.SECONDS)
+        assertEquals(true, received?.received)
+
+        activityRule.scenario.onActivity { activity ->
+            activity.setContent {}
+        }
+
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        var latest = received
+        while (System.nanoTime() < deadline && latest?.cancelledCompletions != 1) {
+            latest = snapshots.poll(deadline - System.nanoTime(), TimeUnit.NANOSECONDS) ?: latest
+        }
+        assertEquals(latest.toString(), 1, latest?.cancelledCompletions)
+        Thread.sleep(200)
+        val duplicate = snapshots.poll()
+        assertTrue(duplicate?.toString() ?: "no duplicate completion", duplicate == null || duplicate.cancelledCompletions == 1)
     }
 
     private fun setSmokeContent(onSnapshot: (RealWebViewSmokeSnapshot) -> Unit) {

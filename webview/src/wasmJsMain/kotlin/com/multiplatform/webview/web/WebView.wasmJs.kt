@@ -7,6 +7,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.multiplatform.webview.jsbridge.ConsoleBridge
 import com.multiplatform.webview.jsbridge.WebViewJsBridge
+import com.multiplatform.webview.request.WebViewSchemeConfig
 import kotlinx.browser.document
 import kotlinx.coroutines.launch
 import org.w3c.dom.Element
@@ -159,7 +160,11 @@ actual fun ActualWebView(
     onDispose: (NativeWebView) -> Unit,
     platformWebViewParams: PlatformWebViewParams?,
     factory: (WebViewFactoryParam) -> NativeWebView,
+    schemeConfig: WebViewSchemeConfig?,
 ) {
+    if (schemeConfig != null) {
+        throw UnsupportedOperationException("Custom scheme handlers are not supported on Wasm")
+    }
     val scope = rememberCoroutineScope()
     val stateAdapter = rememberWebViewStateAdapter(state)
     val htmlNavigator = rememberHtmlViewNavigator()

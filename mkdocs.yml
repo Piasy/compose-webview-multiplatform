@@ -18,3 +18,4 @@ nav:
   - 'Navigation': navigation.md
   - 'Setting': setting.md
   - 'Communication': communication.md
+  - 'Custom scheme handlers': scheme-handler.md

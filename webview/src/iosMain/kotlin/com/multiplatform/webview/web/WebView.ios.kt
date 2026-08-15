@@ -10,6 +10,8 @@ import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
 import com.multiplatform.webview.jsbridge.ConsoleBridge
 import com.multiplatform.webview.jsbridge.WebViewJsBridge
+import com.multiplatform.webview.request.WKWebViewSchemeHandler
+import com.multiplatform.webview.request.WebViewSchemeConfig
 import com.multiplatform.webview.util.toUIColor
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.cValue
@@ -39,6 +41,7 @@ actual fun ActualWebView(
     onDispose: (NativeWebView) -> Unit,
     platformWebViewParams: PlatformWebViewParams?,
     factory: (WebViewFactoryParam) -> NativeWebView,
+    schemeConfig: WebViewSchemeConfig?,
 ) {
     IOSWebView(
         state = state,
@@ -49,6 +52,7 @@ actual fun ActualWebView(
         onCreated = onCreated,
         onDispose = onDispose,
         factory = factory,
+        schemeConfig = schemeConfig,
     )
 }
 
@@ -67,6 +71,21 @@ actual fun defaultWebViewFactory(param: WebViewFactoryParam) =
         configuration = param.config,
     )
 
+internal fun validateSchemeFactoryResult(
+    webView: WKWebView,
+    schemeConfig: WebViewSchemeConfig,
+    schemeHandler: WKWebViewSchemeHandler,
+) {
+    schemeConfig.registrations.forEach { registration ->
+        require(
+            webView.configuration.urlSchemeHandlerForURLScheme(registration.scheme.lowercase()) ===
+                schemeHandler,
+        ) {
+            "Custom iOS WebView factory must create WKWebView with WebViewFactoryParam.config"
+        }
+    }
+}
+
 /**
  * iOS WebView implementation.
  */
@@ -81,6 +100,7 @@ fun IOSWebView(
     onCreated: (NativeWebView) -> Unit,
     onDispose: (NativeWebView) -> Unit,
     factory: (WebViewFactoryParam) -> NativeWebView,
+    schemeConfig: WebViewSchemeConfig?,
 ) {
     val observer =
         remember {
@@ -91,11 +111,18 @@ fun IOSWebView(
         }
     val navigationDelegate = remember { WKNavigationDelegate(state, navigator) }
     val scope = rememberCoroutineScope()
+    val schemeHandler = schemeConfig?.let { remember { WKWebViewSchemeHandler(it) } }
 
     UIKitView(
         factory = {
             val config =
                 WKWebViewConfiguration().apply {
+                    schemeConfig?.registrations?.forEach { registration ->
+                        setURLSchemeHandler(
+                            urlSchemeHandler = schemeHandler,
+                            forURLScheme = registration.scheme.lowercase(),
+                        )
+                    }
                     allowsInlineMediaPlayback = true
                     mediaTypesRequiringUserActionForPlayback =
                         if (state.webSettings.iOSWebSettings.mediaPlaybackRequiresUserGesture) {
@@ -119,6 +146,9 @@ fun IOSWebView(
                 }
             factory(WebViewFactoryParam(config))
                 .apply {
+                    if (schemeConfig != null && schemeHandler != null) {
+                        validateSchemeFactoryResult(this, schemeConfig, schemeHandler)
+                    }
                     onCreated(this)
                     state.viewState?.let {
                         this.interactionState = it
@@ -180,6 +210,7 @@ fun IOSWebView(
         },
         modifier = modifier,
         onRelease = {
+            schemeHandler?.close()
             state.webView = null
             it.removeProgressObservers(
                 observer = observer,

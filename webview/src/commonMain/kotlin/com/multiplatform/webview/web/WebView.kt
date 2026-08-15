@@ -3,10 +3,13 @@ package com.multiplatform.webview.web
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import com.multiplatform.webview.jsbridge.ConsoleBridge
 import com.multiplatform.webview.jsbridge.WebViewJsBridge
+import com.multiplatform.webview.request.WebViewSchemeConfig
+import com.multiplatform.webview.util.KLogger
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.merge
 
@@ -81,6 +84,78 @@ fun WebView(
     platformWebViewParams: PlatformWebViewParams? = null,
     factory: ((WebViewFactoryParam) -> NativeWebView)? = null,
 ) {
+    WebViewImpl(
+        state = state,
+        modifier = modifier,
+        captureBackPresses = captureBackPresses,
+        navigator = navigator,
+        webViewJsBridge = webViewJsBridge,
+        consoleBridge = consoleBridge,
+        onCreated = onCreated,
+        onDispose = onDispose,
+        platformWebViewParams = platformWebViewParams,
+        factory = factory,
+        schemeConfig = null,
+    )
+}
+
+/**
+ * Provides a WebView whose registered custom schemes are handled by common suspend handlers.
+ * The configuration is fixed when the native WebView is created; use Compose [key] to replace it.
+ */
+@Composable
+fun WebView(
+    state: WebViewState,
+    schemeConfig: WebViewSchemeConfig,
+    modifier: Modifier = Modifier,
+    captureBackPresses: Boolean = true,
+    navigator: WebViewNavigator = rememberWebViewNavigator(),
+    webViewJsBridge: WebViewJsBridge? = null,
+    consoleBridge: ConsoleBridge? = null,
+    onCreated: (NativeWebView) -> Unit = {},
+    onDispose: (NativeWebView) -> Unit = {},
+    platformWebViewParams: PlatformWebViewParams? = null,
+    factory: ((WebViewFactoryParam) -> NativeWebView)? = null,
+) {
+    require(navigator.requestInterceptor == null) {
+        "RequestInterceptor cannot be used together with WebViewSchemeConfig"
+    }
+    val initialConfig = remember { schemeConfig }
+    if (schemeConfig !== initialConfig) {
+        KLogger.w {
+            "Ignoring a new WebViewSchemeConfig for an existing WebView. " +
+                "Wrap WebView in key(config) to recreate it."
+        }
+    }
+    WebViewImpl(
+        state = state,
+        modifier = modifier,
+        captureBackPresses = captureBackPresses,
+        navigator = navigator,
+        webViewJsBridge = webViewJsBridge,
+        consoleBridge = consoleBridge,
+        onCreated = onCreated,
+        onDispose = onDispose,
+        platformWebViewParams = platformWebViewParams,
+        factory = factory,
+        schemeConfig = initialConfig,
+    )
+}
+
+@Composable
+private fun WebViewImpl(
+    state: WebViewState,
+    modifier: Modifier,
+    captureBackPresses: Boolean,
+    navigator: WebViewNavigator,
+    webViewJsBridge: WebViewJsBridge?,
+    consoleBridge: ConsoleBridge?,
+    onCreated: (NativeWebView) -> Unit,
+    onDispose: (NativeWebView) -> Unit,
+    platformWebViewParams: PlatformWebViewParams?,
+    factory: ((WebViewFactoryParam) -> NativeWebView)?,
+    schemeConfig: WebViewSchemeConfig?,
+) {
     val webView = state.webView
 
     webView?.let { wv ->
@@ -127,6 +202,7 @@ fun WebView(
         onDispose = onDispose,
         platformWebViewParams = platformWebViewParams,
         factory = factory ?: ::defaultWebViewFactory,
+        schemeConfig = schemeConfig,
     )
 
     DisposableEffect(Unit) {
@@ -177,4 +253,5 @@ expect fun ActualWebView(
     onDispose: (NativeWebView) -> Unit = {},
     platformWebViewParams: PlatformWebViewParams? = null,
     factory: (WebViewFactoryParam) -> NativeWebView = ::defaultWebViewFactory,
+    schemeConfig: WebViewSchemeConfig? = null,
 )

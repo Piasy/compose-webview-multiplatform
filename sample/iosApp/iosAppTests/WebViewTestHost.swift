@@ -22,6 +22,20 @@ final class WebViewTestHost {
         self.window = window
     }
 
+    func mountScheme(onSnapshot: @escaping (SchemeWebViewSmokeSnapshot) -> Void) {
+        let controller = RealWebViewSmokeHarness_iosKt.schemeWebViewSmokeViewController(
+            onSnapshot: onSnapshot
+        )
+        mount(controller: controller)
+    }
+
+    func mountSchemeCancellation(onSnapshot: @escaping (SchemeCancellationSnapshot) -> Void) {
+        let controller = RealWebViewSmokeHarness_iosKt.schemeCancellationViewController(
+            onSnapshot: onSnapshot
+        )
+        mount(controller: controller)
+    }
+
     func findWebView() -> WKWebView? {
         guard let rootView = controller?.view else {
             return nil
@@ -115,6 +129,16 @@ final class WebViewTestHost {
         window?.isHidden = true
         controller = nil
         window = nil
+    }
+
+    private func mount(controller: UIViewController) {
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        self.controller = controller
+        self.window = window
     }
 
     private func findWebView(in view: UIView) -> WKWebView? {

@@ -56,6 +56,56 @@ final class RealWebViewSmokeTests: XCTestCase {
         )
     }
 
+    func testRealWKWebViewLoadsCustomSchemeNavigationAndSubresources() throws {
+        let host = WebViewTestHost()
+        self.host = host
+        var schemeSnapshot: SchemeWebViewSmokeSnapshot?
+        host.mountScheme { snapshot in
+            schemeSnapshot = snapshot
+        }
+
+        let completed = host.waitUntil(timeout: 20) {
+            self.normalizeProbe(schemeSnapshot?.jsProbeResult) == "styled|script|image|frame|fetch|xhr|head-ok|0|404"
+        }
+        guard completed, let snapshot = schemeSnapshot else {
+            XCTFail("Timed out waiting for the real WKWebView custom scheme harness: \(String(describing: schemeSnapshot))")
+            return
+        }
+
+        XCTAssertEqual(snapshot.loadingState, "Finished")
+        XCTAssertEqual(snapshot.pageTitle, "CWM Scheme Ready")
+        XCTAssertEqual(normalizeProbe(snapshot.jsProbeResult), "styled|script|image|frame|fetch|xhr|head-ok|0|404")
+        XCTAssertTrue(snapshot.errorsForCurrentRequest.isEmpty)
+        XCTAssertTrue(snapshot.requestUrls.contains("cwmtest://host/index.html?source=smoke"))
+        XCTAssertTrue(snapshot.requestUrls.contains { $0.hasSuffix("/fetch?source=js") })
+        XCTAssertTrue(snapshot.requestMethods.contains("HEAD"))
+        XCTAssertTrue(snapshot.completedStatuses.contains(404))
+    }
+
+    func testStoppingSchemeTaskCancelsCoordinatorWithoutCompletingWebKitLoad() {
+        let host = WebViewTestHost()
+        self.host = host
+        var cancellationSnapshot: SchemeCancellationSnapshot?
+        host.mountSchemeCancellation { snapshot in
+            cancellationSnapshot = snapshot
+        }
+
+        guard host.waitUntil(timeout: 5, predicate: { cancellationSnapshot?.received == true }),
+              let webView = host.findWebView() else {
+            XCTFail("Timed out waiting for the custom scheme request to start")
+            return
+        }
+        webView.stopLoading()
+
+        XCTAssertTrue(
+            host.waitUntil(timeout: 5) { cancellationSnapshot?.cancelledCompletions == 1 },
+            "Expected exactly one Cancelled observer completion: \(String(describing: cancellationSnapshot))"
+        )
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(cancellationSnapshot?.cancelledCompletions, 1)
+        XCTAssertTrue(webView.title?.isEmpty != false)
+    }
+
     private func normalizeProbe(_ value: String?) -> String? {
         value?.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
     }
