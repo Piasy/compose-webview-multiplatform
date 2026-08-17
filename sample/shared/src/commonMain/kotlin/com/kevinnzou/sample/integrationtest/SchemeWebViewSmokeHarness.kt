@@ -14,7 +14,10 @@ import com.multiplatform.webview.request.WebViewSchemeRequest
 import com.multiplatform.webview.request.WebViewSchemeRequestContext
 import com.multiplatform.webview.request.WebViewSchemeResponse
 import com.multiplatform.webview.web.LoadingState
+import com.multiplatform.webview.web.WebContent
 import com.multiplatform.webview.web.WebView
+import com.multiplatform.webview.web.WebViewNavigationDecision
+import com.multiplatform.webview.web.WebViewState
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -48,6 +51,19 @@ private data class ObservedSchemeWebViewState(
 
 @Composable
 fun SchemeWebViewSmokeHarness(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit = {}) {
+    SchemeWebViewSmokeHarness(loadInitialUrlWithNavigator = false, onSnapshot = onSnapshot)
+}
+
+@Composable
+fun NavigatorSchemeWebViewSmokeHarness(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit = {}) {
+    SchemeWebViewSmokeHarness(loadInitialUrlWithNavigator = true, onSnapshot = onSnapshot)
+}
+
+@Composable
+private fun SchemeWebViewSmokeHarness(
+    loadInitialUrlWithNavigator: Boolean,
+    onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit,
+) {
     val observer = remember { SchemeSmokeObserver() }
     val config =
         remember {
@@ -64,8 +80,16 @@ fun SchemeWebViewSmokeHarness(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit =
                 observer = observer,
             )
         }
-    val state = rememberWebViewState(SCHEME_WEB_VIEW_SMOKE_URL)
+    val state =
+        if (loadInitialUrlWithNavigator) {
+            remember { WebViewState(WebContent.NavigatorOnly) }
+        } else {
+            rememberWebViewState(SCHEME_WEB_VIEW_SMOKE_URL)
+        }
     val navigator = rememberWebViewNavigator()
+    LaunchedEffect(loadInitialUrlWithNavigator, navigator) {
+        if (loadInitialUrlWithNavigator) navigator.loadUrl(SCHEME_WEB_VIEW_SMOKE_URL)
+    }
 
     LaunchedEffect(state, navigator) {
         var evaluatedReadyPage = false
@@ -96,6 +120,7 @@ fun SchemeWebViewSmokeHarness(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit =
         state = state,
         schemeConfig = config,
         navigator = navigator,
+        navigationHandler = { WebViewNavigationDecision.Allow },
         modifier = Modifier.fillMaxSize(),
     )
 }

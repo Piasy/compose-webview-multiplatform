@@ -27,6 +27,7 @@ actual fun ActualWebView(
     platformWebViewParams: PlatformWebViewParams?,
     factory: (WebViewFactoryParam) -> NativeWebView,
     schemeConfig: WebViewSchemeConfig?,
+    navigationHandler: WebViewNavigationHandler?,
 ) {
     require(schemeConfig == null || platformWebViewParams?.client == null) {
         "A custom Android WebViewClient cannot be used together with WebViewSchemeConfig"
@@ -55,6 +56,7 @@ actual fun ActualWebView(
         chromeClient =
             platformWebViewParams?.chromeClient ?: remember { AccompanistWebChromeClient() },
         factory = { factory(WebViewFactoryParam(it)) },
+        navigationHandler = navigationHandler,
     )
 }
 

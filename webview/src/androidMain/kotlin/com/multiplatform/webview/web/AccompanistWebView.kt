@@ -79,6 +79,7 @@ fun AccompanistWebView(
     client: AccompanistWebViewClient = remember { AccompanistWebViewClient() },
     chromeClient: AccompanistWebChromeClient = remember { AccompanistWebChromeClient() },
     factory: ((Context) -> WebView)? = null,
+    navigationHandler: WebViewNavigationHandler? = null,
 ) {
     BoxWithConstraints(modifier) {
         // WebView changes it's layout strategy based on
@@ -116,6 +117,7 @@ fun AccompanistWebView(
             client,
             chromeClient,
             factory,
+            navigationHandler,
         )
     }
 }
@@ -159,6 +161,7 @@ fun AccompanistWebView(
     client: AccompanistWebViewClient = remember { AccompanistWebViewClient() },
     chromeClient: AccompanistWebChromeClient = remember { AccompanistWebChromeClient() },
     factory: ((Context) -> WebView)? = null,
+    navigationHandler: WebViewNavigationHandler? = null,
 ) {
     val webView = state.webView
     val scope = rememberCoroutineScope()
@@ -172,7 +175,9 @@ fun AccompanistWebView(
     // parent Web composable
     client.state = state
     client.navigator = navigator
+    client.navigationHandler = navigationHandler
     chromeClient.state = state
+    chromeClient.navigationHandler = navigationHandler
 
     AndroidView(
         factory = { context ->
@@ -187,6 +192,7 @@ fun AccompanistWebView(
                     }
 
                     chromeClient.context = context
+                    chromeClient.parentWebView = this
                     webChromeClient = chromeClient
                     webViewClient = client
 
@@ -224,6 +230,10 @@ fun AccompanistWebView(
                             loadsImagesAutomatically = it.loadsImagesAutomatically
                             domStorageEnabled = it.domStorageEnabled
                             mediaPlaybackRequiresUserGesture = it.mediaPlaybackRequiresUserGesture
+                            if (navigationHandler != null) {
+                                setSupportMultipleWindows(true)
+                                javaScriptCanOpenWindowsAutomatically = true
+                            }
 
                             if (it.enableSandbox) {
                                 client.assetLoader =
@@ -267,6 +277,7 @@ fun AccompanistWebView(
         modifier = modifier,
         onReset = {},
         onRelease = {
+            chromeClient.parentWebView = null
             onDispose(it)
         },
     )
@@ -285,6 +296,7 @@ open class AccompanistWebViewClient : WebViewClient() {
         internal set
     open lateinit var navigator: WebViewNavigator
         internal set
+    internal var navigationHandler: WebViewNavigationHandler? = null
     private var isRedirect = false
 
     var assetLoader: WebViewAssetLoader? = null
@@ -390,6 +402,20 @@ open class AccompanistWebViewClient : WebViewClient() {
         KLogger.d {
             "shouldOverrideUrlLoading: ${request?.url} ${request?.isForMainFrame} ${request?.isRedirect} ${request?.method}"
         }
+        val handler = navigationHandler
+        if (handler != null && request?.isForMainFrame == true) {
+            val decision =
+                handler.onNavigationRequest(
+                    WebViewNavigationRequest(
+                        url = request.url.toString(),
+                        method = request.method ?: "GET",
+                        destination = WebViewNavigationDestination.CurrentMainFrame,
+                        isRedirect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) request.isRedirect else false,
+                        hasUserGesture = request.hasGesture(),
+                    ),
+                )
+            if (decision == WebViewNavigationDecision.Cancel) return true
+        }
         if (isRedirect || request == null || navigator.requestInterceptor == null) {
             isRedirect = false
             return super.shouldOverrideUrlLoading(view, request)
@@ -447,7 +473,50 @@ open class AccompanistWebChromeClient : WebChromeClient() {
         internal set
     lateinit var context: Context
         internal set
+    internal var navigationHandler: WebViewNavigationHandler? = null
+    internal var parentWebView: WebView? = null
     private var lastLoadedUrl = ""
+
+    override fun onCreateWindow(
+        view: WebView?,
+        isDialog: Boolean,
+        isUserGesture: Boolean,
+        resultMsg: android.os.Message?,
+    ): Boolean {
+        val handler = navigationHandler ?: return false
+        val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+        var completed = false
+        val popup = WebView(context)
+        popup.webViewClient =
+            object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    popupView: WebView?,
+                    request: WebResourceRequest?,
+                ): Boolean {
+                    if (!completed && request != null) {
+                        completed = true
+                        val decision =
+                            handler.onNavigationRequest(
+                                WebViewNavigationRequest(
+                                    url = request.url.toString(),
+                                    method = request.method ?: "GET",
+                                    destination = WebViewNavigationDestination.NewWindow,
+                                    isRedirect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) request.isRedirect else false,
+                                    hasUserGesture = isUserGesture,
+                                ),
+                            )
+                        if (decision == WebViewNavigationDecision.Allow) {
+                            parentWebView?.loadUrl(request.url.toString())
+                        }
+                    }
+                    popupView?.destroy()
+                    return true
+                }
+            }
+        transport.webView = popup
+        resultMsg.sendToTarget()
+        return true
+    }
 
     override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
         try {

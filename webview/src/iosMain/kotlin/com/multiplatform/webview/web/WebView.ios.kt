@@ -42,6 +42,7 @@ actual fun ActualWebView(
     platformWebViewParams: PlatformWebViewParams?,
     factory: (WebViewFactoryParam) -> NativeWebView,
     schemeConfig: WebViewSchemeConfig?,
+    navigationHandler: WebViewNavigationHandler?,
 ) {
     IOSWebView(
         state = state,
@@ -53,6 +54,7 @@ actual fun ActualWebView(
         onDispose = onDispose,
         factory = factory,
         schemeConfig = schemeConfig,
+        navigationHandler = navigationHandler,
     )
 }
 
@@ -101,6 +103,7 @@ fun IOSWebView(
     onDispose: (NativeWebView) -> Unit,
     factory: (WebViewFactoryParam) -> NativeWebView,
     schemeConfig: WebViewSchemeConfig?,
+    navigationHandler: WebViewNavigationHandler?,
 ) {
     val observer =
         remember {
@@ -109,7 +112,8 @@ fun IOSWebView(
                 navigator = navigator,
             )
         }
-    val navigationDelegate = remember { WKNavigationDelegate(state, navigator) }
+    val navigationDelegate = remember { WKNavigationDelegate(state, navigator, navigationHandler) }
+    val uiDelegate = remember(navigationHandler) { navigationHandler?.let(::WKUIDelegate) }
     val scope = rememberCoroutineScope()
     val schemeHandler = schemeConfig?.let { remember { WKWebViewSchemeHandler(it) } }
 
@@ -159,6 +163,7 @@ fun IOSWebView(
                         observer = observer,
                     )
                     this.navigationDelegate = navigationDelegate
+                    this.UIDelegate = uiDelegate
 
                     state.webSettings.let {
                         val backgroundColor =
@@ -216,6 +221,7 @@ fun IOSWebView(
                 observer = observer,
             )
             it.navigationDelegate = null
+            it.UIDelegate = null
             onDispose(it)
         },
         properties =

@@ -13,6 +13,11 @@ fun schemeWebViewSmokeViewController(onSnapshot: (SchemeWebViewSmokeSnapshot) ->
         SchemeWebViewSmokeHarness(onSnapshot = onSnapshot)
     }
 
+fun navigatorSchemeWebViewSmokeViewController(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit): UIViewController =
+    ComposeUIViewController {
+        NavigatorSchemeWebViewSmokeHarness(onSnapshot = onSnapshot)
+    }
+
 fun schemeCancellationViewController(onSnapshot: (SchemeCancellationSnapshot) -> Unit): UIViewController =
     ComposeUIViewController {
         SchemeCancellationHarness(onSnapshot = onSnapshot)

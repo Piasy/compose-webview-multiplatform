@@ -10,6 +10,7 @@ import com.multiplatform.webview.jsbridge.ConsoleBridge
 import com.multiplatform.webview.jsbridge.WebViewJsBridge
 import com.multiplatform.webview.request.WebViewSchemeConfig
 import com.multiplatform.webview.util.KLogger
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.merge
 
@@ -43,6 +44,7 @@ fun WebView(
     onCreated: () -> Unit = {},
     onDispose: () -> Unit = {},
     platformWebViewParams: PlatformWebViewParams? = null,
+    navigationHandler: WebViewNavigationHandler? = null,
 ) {
     WebView(
         state = state,
@@ -54,6 +56,7 @@ fun WebView(
         onCreated = { _ -> onCreated() },
         onDispose = { _ -> onDispose() },
         platformWebViewParams = platformWebViewParams,
+        navigationHandler = navigationHandler,
     )
 }
 
@@ -83,6 +86,7 @@ fun WebView(
     onDispose: (NativeWebView) -> Unit = {},
     platformWebViewParams: PlatformWebViewParams? = null,
     factory: ((WebViewFactoryParam) -> NativeWebView)? = null,
+    navigationHandler: WebViewNavigationHandler? = null,
 ) {
     WebViewImpl(
         state = state,
@@ -96,6 +100,7 @@ fun WebView(
         platformWebViewParams = platformWebViewParams,
         factory = factory,
         schemeConfig = null,
+        navigationHandler = navigationHandler,
     )
 }
 
@@ -116,6 +121,7 @@ fun WebView(
     onDispose: (NativeWebView) -> Unit = {},
     platformWebViewParams: PlatformWebViewParams? = null,
     factory: ((WebViewFactoryParam) -> NativeWebView)? = null,
+    navigationHandler: WebViewNavigationHandler? = null,
 ) {
     require(navigator.requestInterceptor == null) {
         "RequestInterceptor cannot be used together with WebViewSchemeConfig"
@@ -139,6 +145,7 @@ fun WebView(
         platformWebViewParams = platformWebViewParams,
         factory = factory,
         schemeConfig = initialConfig,
+        navigationHandler = navigationHandler,
     )
 }
 
@@ -155,26 +162,36 @@ private fun WebViewImpl(
     platformWebViewParams: PlatformWebViewParams?,
     factory: ((WebViewFactoryParam) -> NativeWebView)?,
     schemeConfig: WebViewSchemeConfig?,
+    navigationHandler: WebViewNavigationHandler?,
 ) {
-    val webView = state.webView
-
-    webView?.let { wv ->
-        LaunchedEffect(wv, navigator) {
-            with(navigator) {
-                wv.handleNavigationEvents()
+    LaunchedEffect(state, navigator) {
+        snapshotFlow { state.webView }.collectLatest { webView ->
+            if (webView != null) {
+                with(navigator) {
+                    webView.handleNavigationEvents()
+                }
             }
         }
+    }
 
-        // Handle content loading for all platforms
-        LaunchedEffect(wv, state) {
-            snapshotFlow { state.content }.collect { content ->
-                wv.loadContent(content)
+    // Handle content loading for all platforms without relying on a recomposition after the
+    // native view assigns state.webView. Some interop containers mount the native view without
+    // scheduling that extra composition.
+    LaunchedEffect(state) {
+        snapshotFlow { state.webView }.collectLatest { webView ->
+            if (webView != null) {
+                snapshotFlow { state.content }.collect { content ->
+                    webView.loadContent(content)
+                }
             }
         }
+    }
 
-        // inject the js bridge when the webview is loaded.
-        if (webViewJsBridge != null) {
-            LaunchedEffect(wv, state) {
+    // inject the js bridge when the webview is loaded.
+    if (webViewJsBridge != null) {
+        LaunchedEffect(state, webViewJsBridge) {
+            snapshotFlow { state.webView }.collectLatest { webView ->
+                if (webView == null) return@collectLatest
                 val loadingStateFlow =
                     snapshotFlow { state.loadingState }.filter { it is LoadingState.Finished }
                 val lastLoadedUrFlow =
@@ -184,7 +201,7 @@ private fun WebViewImpl(
                 merge(loadingStateFlow, lastLoadedUrFlow).collect {
                     // double check the loading state to make sure the WebView is loaded.
                     if (state.loadingState is LoadingState.Finished) {
-                        wv.injectJsBridge()
+                        webView.injectJsBridge()
                     }
                 }
             }
@@ -203,6 +220,7 @@ private fun WebViewImpl(
         platformWebViewParams = platformWebViewParams,
         factory = factory ?: ::defaultWebViewFactory,
         schemeConfig = schemeConfig,
+        navigationHandler = navigationHandler,
     )
 
     DisposableEffect(Unit) {
@@ -254,4 +272,5 @@ expect fun ActualWebView(
     platformWebViewParams: PlatformWebViewParams? = null,
     factory: (WebViewFactoryParam) -> NativeWebView = ::defaultWebViewFactory,
     schemeConfig: WebViewSchemeConfig? = null,
+    navigationHandler: WebViewNavigationHandler? = null,
 )

@@ -29,6 +29,7 @@ import platform.darwin.NSObject
 class WKNavigationDelegate(
     private val state: WebViewState,
     private val navigator: WebViewNavigator,
+    private val navigationHandler: WebViewNavigationHandler?,
 ) : NSObject(),
     WKNavigationDelegateProtocol {
     private var isRedirect = false
@@ -127,6 +128,22 @@ class WKNavigationDelegate(
         val url = decidePolicyForNavigationAction.request.URL?.absoluteString
         KLogger.info {
             "Outer decidePolicyForNavigationAction: $url $isRedirect $decidePolicyForNavigationAction"
+        }
+        if (
+            url != null &&
+            decidePolicyForNavigationAction.targetFrame?.mainFrame == true &&
+            navigationHandler?.onNavigationRequest(
+                WebViewNavigationRequest(
+                    url = url,
+                    method = decidePolicyForNavigationAction.request.HTTPMethod ?: "GET",
+                    destination = WebViewNavigationDestination.CurrentMainFrame,
+                    isRedirect = isRedirect,
+                    hasUserGesture = null,
+                ),
+            ) == WebViewNavigationDecision.Cancel
+        ) {
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+            return
         }
         if (
             url != null &&

@@ -29,11 +29,29 @@ final class WebViewTestHost {
         mount(controller: controller)
     }
 
+    func mountNavigatorScheme(onSnapshot: @escaping (SchemeWebViewSmokeSnapshot) -> Void) {
+        let controller = RealWebViewSmokeHarness_iosKt.navigatorSchemeWebViewSmokeViewController(
+            onSnapshot: onSnapshot
+        )
+        mount(controller: controller)
+    }
+
     func mountSchemeCancellation(onSnapshot: @escaping (SchemeCancellationSnapshot) -> Void) {
         let controller = RealWebViewSmokeHarness_iosKt.schemeCancellationViewController(
             onSnapshot: onSnapshot
         )
         mount(controller: controller)
+    }
+
+    func mountNavigation(onSnapshot: @escaping (NavigationWebViewSmokeSnapshot) -> Void) {
+        let controller = NavigationWebViewSmokeHarness_iosKt.navigationWebViewSmokeViewController(
+            onSnapshot: onSnapshot
+        )
+        mount(controller: controller)
+    }
+
+    func mountNavigationWithoutHandler() {
+        mount(controller: NavigationWebViewSmokeHarness_iosKt.navigationWebViewNoHandlerViewController())
     }
 
     func findWebView() -> WKWebView? {

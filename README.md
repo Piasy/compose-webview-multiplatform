@@ -1,6 +1,6 @@
 # WebView for JetBrains Compose Multiplatform
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.kevinnzou/compose-webview-multiplatform.svg)](https://search.maven.org/artifact/io.github.kevinnzou/compose-webview-multiplatform)
+[![Maven Central](https://img.shields.io/maven-central/v/com.piasy/compose-webview-multiplatform.svg)](https://search.maven.org/artifact/com.piasy/compose-webview-multiplatform)
 [![Kotlin](https://img.shields.io/badge/kotlin-v2.1.20-blue.svg?logo=kotlin)](http://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose%20Multiplatform-v1.8.0-blue)](https://github.com/JetBrains/compose-multiplatform)
 
@@ -657,7 +657,7 @@ to [BasicWebViewSample](https://github.com/KevinnZou/compose-webview-multiplatfo
 
 ## Download
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.kevinnzou/compose-webview-multiplatform.svg)](https://search.maven.org/artifact/io.github.kevinnzou/compose-webview-multiplatform)
+[![Maven Central](https://img.shields.io/maven-central/v/com.piasy/compose-webview-multiplatform.svg)](https://search.maven.org/artifact/com.piasy/compose-webview-multiplatform)
 
 You can add this library to your project using Gradle.
 
@@ -677,7 +677,7 @@ kotlin {
         commonMain {
             dependencies {
                 // use api since the desktop app need to access the Cef to initialize it.
-                api("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
+                api("com.piasy:compose-webview-multiplatform:2.1.1")
             }
         }
     }

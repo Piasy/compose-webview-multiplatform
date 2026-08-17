@@ -28,6 +28,7 @@ actual fun ActualWebView(
     platformWebViewParams: PlatformWebViewParams?,
     factory: (WebViewFactoryParam) -> NativeWebView,
     schemeConfig: WebViewSchemeConfig?,
+    navigationHandler: WebViewNavigationHandler?,
 ) {
     if (schemeConfig != null) {
         throw UnsupportedOperationException("Custom scheme handlers are not supported on Desktop")
