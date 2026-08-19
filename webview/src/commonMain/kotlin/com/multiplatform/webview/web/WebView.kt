@@ -101,12 +101,16 @@ fun WebView(
         factory = factory,
         schemeConfig = null,
         navigationHandler = navigationHandler,
+        onSchemeSetupFailed = ::logUnhandledSchemeSetupFailure,
     )
 }
 
 /**
  * Provides a WebView whose registered custom schemes are handled by common suspend handlers.
  * The configuration is fixed when the native WebView is created; use Compose [key] to replace it.
+ *
+ * @param onSchemeSetupFailed Called if the platform cannot install custom-scheme support. The
+ * default logs the failure. Callers should replace or hide this WebView when notified.
  */
 @Composable
 fun WebView(
@@ -122,6 +126,7 @@ fun WebView(
     platformWebViewParams: PlatformWebViewParams? = null,
     factory: ((WebViewFactoryParam) -> NativeWebView)? = null,
     navigationHandler: WebViewNavigationHandler? = null,
+    onSchemeSetupFailed: (Throwable) -> Unit = ::logUnhandledSchemeSetupFailure,
 ) {
     require(navigator.requestInterceptor == null) {
         "RequestInterceptor cannot be used together with WebViewSchemeConfig"
@@ -146,6 +151,7 @@ fun WebView(
         factory = factory,
         schemeConfig = initialConfig,
         navigationHandler = navigationHandler,
+        onSchemeSetupFailed = onSchemeSetupFailed,
     )
 }
 
@@ -163,6 +169,7 @@ private fun WebViewImpl(
     factory: ((WebViewFactoryParam) -> NativeWebView)?,
     schemeConfig: WebViewSchemeConfig?,
     navigationHandler: WebViewNavigationHandler?,
+    onSchemeSetupFailed: (Throwable) -> Unit,
 ) {
     LaunchedEffect(state, navigator) {
         snapshotFlow { state.webView }.collectLatest { webView ->
@@ -221,6 +228,7 @@ private fun WebViewImpl(
         factory = factory ?: ::defaultWebViewFactory,
         schemeConfig = schemeConfig,
         navigationHandler = navigationHandler,
+        onSchemeSetupFailed = onSchemeSetupFailed,
     )
 
     DisposableEffect(Unit) {
@@ -273,4 +281,11 @@ expect fun ActualWebView(
     factory: (WebViewFactoryParam) -> NativeWebView = ::defaultWebViewFactory,
     schemeConfig: WebViewSchemeConfig? = null,
     navigationHandler: WebViewNavigationHandler? = null,
+    onSchemeSetupFailed: (Throwable) -> Unit = ::logUnhandledSchemeSetupFailure,
 )
+
+internal fun logUnhandledSchemeSetupFailure(throwable: Throwable) {
+    KLogger.e(throwable) {
+        "Custom-scheme setup failed without an application error handler"
+    }
+}

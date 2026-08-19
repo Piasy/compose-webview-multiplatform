@@ -58,6 +58,7 @@ internal class AndroidWebViewSchemeAdapter(
         check(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             "This Android WebView does not support document-start scripts"
         }
+        this.webView = webView
         val originRules = config.registrations.mapTo(mutableSetOf()) { "${it.scheme.lowercase()}://" }
         WebViewCompat.addWebMessageListener(
             webView,
@@ -91,14 +92,19 @@ internal class AndroidWebViewSchemeAdapter(
                 ),
                 originRules,
             )
-        this.webView = webView
     }
 
     fun close() {
-        webView?.let { WebViewCompat.removeWebMessageListener(it, FETCH_BRIDGE_NAME) }
-        scriptHandler?.remove()
+        val installedWebView = webView
+        val installedScriptHandler = scriptHandler
         webView = null
         scriptHandler = null
+        runCatching {
+            installedWebView?.let {
+                WebViewCompat.removeWebMessageListener(it, FETCH_BRIDGE_NAME)
+            }
+        }
+        runCatching { installedScriptHandler?.remove() }
         coordinator.close()
         scope.cancel()
     }

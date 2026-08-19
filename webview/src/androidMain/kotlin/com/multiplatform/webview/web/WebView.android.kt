@@ -10,6 +10,7 @@ import com.multiplatform.webview.jsbridge.WebViewJsBridge
 import com.multiplatform.webview.request.AndroidWebViewSchemeAdapter
 import com.multiplatform.webview.request.AndroidWebViewSchemeClient
 import com.multiplatform.webview.request.WebViewSchemeConfig
+import com.multiplatform.webview.util.KLogger
 
 /**
  * Android WebView implementation.
@@ -28,6 +29,7 @@ actual fun ActualWebView(
     factory: (WebViewFactoryParam) -> NativeWebView,
     schemeConfig: WebViewSchemeConfig?,
     navigationHandler: WebViewNavigationHandler?,
+    onSchemeSetupFailed: (Throwable) -> Unit,
 ) {
     require(schemeConfig == null || platformWebViewParams?.client == null) {
         "A custom Android WebViewClient cannot be used together with WebViewSchemeConfig"
@@ -45,7 +47,23 @@ actual fun ActualWebView(
         webViewJsBridge,
         consoleBridge,
         onCreated = { webView ->
-            schemeAdapter?.installFetchBridge(webView)
+            try {
+                schemeAdapter?.installFetchBridge(webView)
+            } catch (throwable: Throwable) {
+                runCatching { schemeAdapter?.close() }
+                    .onFailure { cleanupFailure ->
+                        KLogger.e(cleanupFailure) {
+                            "Failed to clean up custom-scheme setup"
+                        }
+                    }
+                runCatching { onSchemeSetupFailed(throwable) }
+                    .onFailure { callbackFailure ->
+                        KLogger.e(callbackFailure) {
+                            "Custom-scheme setup failure callback threw an exception"
+                        }
+                    }
+                return@AccompanistWebView
+            }
             onCreated(webView)
         },
         onDispose = { webView ->

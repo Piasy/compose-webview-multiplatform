@@ -43,6 +43,7 @@ actual fun ActualWebView(
     factory: (WebViewFactoryParam) -> NativeWebView,
     schemeConfig: WebViewSchemeConfig?,
     navigationHandler: WebViewNavigationHandler?,
+    onSchemeSetupFailed: (Throwable) -> Unit,
 ) {
     IOSWebView(
         state = state,
