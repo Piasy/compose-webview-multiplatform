@@ -1,5 +1,6 @@
 package com.multiplatform.webview.request
 
+import android.os.Build
 import android.util.Base64
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -8,6 +9,7 @@ import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.multiplatform.webview.request.internal.WebViewSchemeRequestCoordinator
+import com.multiplatform.webview.util.KLogger
 import com.multiplatform.webview.web.AccompanistWebViewClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,23 +42,50 @@ internal class AndroidWebViewSchemeAdapter(
                     ),
                 )
             }
-        return WebResourceResponse(
-            response.mimeType,
-            response.encoding,
-            response.statusCode,
-            requireNotNull(response.reasonPhrase),
-            response.headers,
-            ByteArrayInputStream(response.body),
-        )
+        val webResourceResponse =
+            WebResourceResponse(
+                response.mimeType,
+                response.encoding,
+                response.statusCode,
+                requireNotNull(response.reasonPhrase),
+                response.headers,
+                ByteArrayInputStream(response.body),
+            )
+        val logMessage = {
+            "operation=custom_scheme_request stage=response_returned " +
+                "scheme=${request.url.scheme.orEmpty()} method=${request.method ?: "GET"} " +
+                "is_main_frame=${request.isForMainFrame} status_code=${response.statusCode} " +
+                "mime_type=${response.mimeType} encoding=${response.encoding.orEmpty()} " +
+                "body_bytes=${response.body.size} header_names=${response.headers.keys.sorted().joinToString(",")}"
+        }
+        if (request.isForMainFrame) {
+            KLogger.i(message = logMessage)
+        } else {
+            KLogger.d(message = logMessage)
+        }
+        return webResourceResponse
     }
 
     fun installFetchBridge(webView: WebView) {
         if (this.webView != null) return
-        check(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            "This Android WebView does not support custom-scheme fetch() bridging"
+        val webMessageListenerSupported =
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+        val documentStartScriptSupported =
+            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        val diagnosticContext = diagnosticContext(webView)
+        KLogger.i {
+            "operation=custom_scheme_setup stage=capability_check $diagnosticContext " +
+                "web_message_listener_supported=$webMessageListenerSupported " +
+                "document_start_script_supported=$documentStartScriptSupported " +
+                "registered_schemes=${config.registrations.joinToString(",") { it.scheme }}"
         }
-        check(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            "This Android WebView does not support document-start scripts"
+        if (!webMessageListenerSupported || !documentStartScriptSupported) {
+            KLogger.w {
+                "operation=custom_scheme_setup stage=fetch_bridge_skipped $diagnosticContext " +
+                    "web_message_listener_supported=$webMessageListenerSupported " +
+                    "document_start_script_supported=$documentStartScriptSupported"
+            }
+            return
         }
         this.webView = webView
         val originRules = config.registrations.mapTo(mutableSetOf()) { "${it.scheme.lowercase()}://" }
@@ -83,6 +112,9 @@ internal class AndroidWebViewSchemeAdapter(
                 replyProxy.postMessage(response.toJson(requestJson.getLong("id")).toString())
             }
         }
+        KLogger.i {
+            "operation=custom_scheme_setup stage=web_message_listener_installed $diagnosticContext"
+        }
         scriptHandler =
             WebViewCompat.addDocumentStartJavaScript(
                 webView,
@@ -92,6 +124,9 @@ internal class AndroidWebViewSchemeAdapter(
                 ),
                 originRules,
             )
+        KLogger.i {
+            "operation=custom_scheme_setup stage=document_start_script_installed $diagnosticContext"
+        }
     }
 
     fun close() {
@@ -165,6 +200,19 @@ internal class AndroidWebViewSchemeAdapter(
             })();
             """.trimIndent()
     }
+}
+
+@Suppress("DEPRECATION")
+internal fun diagnosticContext(webView: WebView): String {
+    val provider = runCatching { WebViewCompat.getCurrentWebViewPackage(webView.context) }.getOrNull()
+    val versionCode =
+        provider?.let {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) it.longVersionCode else it.versionCode.toLong()
+        }
+    return "provider_package=${provider?.packageName ?: "unavailable"} " +
+        "provider_version=${provider?.versionName ?: "unavailable"} " +
+        "provider_version_code=${versionCode ?: -1} sdk_int=${Build.VERSION.SDK_INT} " +
+        "manufacturer=${Build.MANUFACTURER} model=${Build.MODEL}"
 }
 
 internal class AndroidWebViewSchemeClient(

@@ -109,8 +109,9 @@ fun WebView(
  * Provides a WebView whose registered custom schemes are handled by common suspend handlers.
  * The configuration is fixed when the native WebView is created; use Compose [key] to replace it.
  *
- * @param onSchemeSetupFailed Called if the platform cannot install custom-scheme support. The
- * default logs the failure. Callers should replace or hide this WebView when notified.
+ * @param onSchemeSetupFailed Called if the platform fails while installing custom-scheme support.
+ * Missing optional Android fetch-bridge capabilities do not trigger this callback; navigation and
+ * static subresources continue through the native request interceptor. The default logs failures.
  */
 @Composable
 fun WebView(

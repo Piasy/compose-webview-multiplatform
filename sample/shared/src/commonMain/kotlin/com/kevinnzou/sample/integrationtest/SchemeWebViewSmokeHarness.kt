@@ -27,6 +27,8 @@ import kotlinx.coroutines.awaitCancellation
 const val SCHEME_WEB_VIEW_SMOKE_TITLE = "CWM Scheme Ready"
 const val SCHEME_WEB_VIEW_SMOKE_EXPECTED_PROBE =
     "styled|script|image|frame|fetch|xhr|head-ok|0|404"
+const val STATIC_SCHEME_WEB_VIEW_SMOKE_TITLE = "CWM Static Scheme Ready"
+const val STATIC_SCHEME_WEB_VIEW_SMOKE_EXPECTED_PROBE = "styled|script|image|frame"
 
 private const val SCHEME_WEB_VIEW_SMOKE_URL = "cwmtest://host/index.html?source=smoke"
 private const val SCHEME_WEB_VIEW_SMOKE_PROBE = "window.__cwmSchemeResult"
@@ -51,17 +53,41 @@ private data class ObservedSchemeWebViewState(
 
 @Composable
 fun SchemeWebViewSmokeHarness(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit = {}) {
-    SchemeWebViewSmokeHarness(loadInitialUrlWithNavigator = false, onSnapshot = onSnapshot)
+    SchemeWebViewSmokeHarness(
+        loadInitialUrlWithNavigator = false,
+        staticOnly = false,
+        onSnapshot = onSnapshot,
+    )
+}
+
+@Composable
+fun StaticSchemeWebViewSmokeHarness(
+    onSchemeSetupFailed: (Throwable) -> Unit = {},
+    onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit = {},
+) {
+    SchemeWebViewSmokeHarness(
+        loadInitialUrlWithNavigator = false,
+        staticOnly = true,
+        onSchemeSetupFailed = onSchemeSetupFailed,
+        onSnapshot = onSnapshot,
+    )
 }
 
 @Composable
 fun NavigatorSchemeWebViewSmokeHarness(onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit = {}) {
-    SchemeWebViewSmokeHarness(loadInitialUrlWithNavigator = true, onSnapshot = onSnapshot)
+    SchemeWebViewSmokeHarness(
+        loadInitialUrlWithNavigator = true,
+        staticOnly = false,
+        onSchemeSetupFailed = {},
+        onSnapshot = onSnapshot,
+    )
 }
 
 @Composable
 private fun SchemeWebViewSmokeHarness(
     loadInitialUrlWithNavigator: Boolean,
+    staticOnly: Boolean,
+    onSchemeSetupFailed: (Throwable) -> Unit = {},
     onSnapshot: (SchemeWebViewSmokeSnapshot) -> Unit,
 ) {
     val observer = remember { SchemeSmokeObserver() }
@@ -71,10 +97,10 @@ private fun SchemeWebViewSmokeHarness(
                 registrations =
                     listOf(
                         WebViewSchemeRegistration("cwmtest") { request ->
-                            schemeSmokeResponse(request)
+                            schemeSmokeResponse(request, staticOnly)
                         },
                         WebViewSchemeRegistration("cwmalt") { request ->
-                            schemeSmokeResponse(request)
+                            schemeSmokeResponse(request, staticOnly)
                         },
                     ),
                 observer = observer,
@@ -103,7 +129,11 @@ private fun SchemeWebViewSmokeHarness(
         }.collect { observed ->
             if (
                 observed.loadingState is LoadingState.Finished &&
-                observed.pageTitle == SCHEME_WEB_VIEW_SMOKE_TITLE &&
+                observed.pageTitle == if (staticOnly) {
+                    STATIC_SCHEME_WEB_VIEW_SMOKE_TITLE
+                } else {
+                    SCHEME_WEB_VIEW_SMOKE_TITLE
+                } &&
                 !evaluatedReadyPage
             ) {
                 evaluatedReadyPage = true
@@ -121,6 +151,7 @@ private fun SchemeWebViewSmokeHarness(
         schemeConfig = config,
         navigator = navigator,
         navigationHandler = { WebViewNavigationDecision.Allow },
+        onSchemeSetupFailed = onSchemeSetupFailed,
         modifier = Modifier.fillMaxSize(),
     )
 }
@@ -171,10 +202,18 @@ private fun ObservedSchemeWebViewState.toSnapshot(
     )
 }
 
-private fun schemeSmokeResponse(request: WebViewSchemeRequest): WebViewSchemeResponse {
+private fun schemeSmokeResponse(
+    request: WebViewSchemeRequest,
+    staticOnly: Boolean,
+): WebViewSchemeResponse {
     val path = request.url.substringAfter("://host").substringBefore('?')
     return when (path) {
-        "/index.html" -> textResponse(SCHEME_HTML, "text/html", headers = mapOf("X-Main" to "yes"))
+        "/index.html" ->
+            textResponse(
+                if (staticOnly) STATIC_SCHEME_HTML else SCHEME_HTML,
+                "text/html",
+                headers = mapOf("X-Main" to "yes"),
+            )
         "/style.css" -> textResponse(":root { --scheme-ready: styled; }", "text/css")
         "/script.js" -> textResponse("window.__externalScript = 'script';", "text/javascript")
         "/image.svg" -> textResponse(SCHEME_SVG, "image/svg+xml")
@@ -255,6 +294,44 @@ private val SCHEME_HTML =
           }).catch(error => {
             window.__cwmSchemeResult = 'error:' + error;
             document.title = '$SCHEME_WEB_VIEW_SMOKE_TITLE';
+          });
+        </script>
+      </body>
+    </html>
+    """.trimIndent()
+
+private val STATIC_SCHEME_HTML =
+    """
+    <!doctype html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>CWM Static Scheme Loading</title>
+        <link rel="stylesheet" href="/style.css">
+        <script src="/script.js"></script>
+      </head>
+      <body>
+        <img id="scheme-image" src="/image.svg">
+        <iframe id="scheme-frame" src="/frame.html"></iframe>
+        <script>
+          Promise.all([
+            new Promise((resolve, reject) => {
+              const image = document.getElementById('scheme-image');
+              image.onload = () => resolve('image');
+              image.onerror = reject;
+            }),
+            new Promise((resolve, reject) => {
+              const frame = document.getElementById('scheme-frame');
+              frame.onload = () => resolve(frame.contentDocument.getElementById('frame-value').textContent);
+              frame.onerror = reject;
+            })
+          ]).then(values => {
+            const style = getComputedStyle(document.documentElement).getPropertyValue('--scheme-ready').trim();
+            window.__cwmSchemeResult = [style, window.__externalScript, values[0], values[1]].join('|');
+            document.title = '$STATIC_SCHEME_WEB_VIEW_SMOKE_TITLE';
+          }).catch(error => {
+            window.__cwmSchemeResult = 'error:' + error;
+            document.title = '$STATIC_SCHEME_WEB_VIEW_SMOKE_TITLE';
           });
         </script>
       </body>

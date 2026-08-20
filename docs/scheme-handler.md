@@ -53,7 +53,7 @@ WebView(state = state, schemeConfig = schemeConfig)
 
 ## Platform limitations
 
-Android does not provide a reliable per-request stop callback from WebView. A running handler may therefore continue until it returns, times out, or the WebView is disposed. Chromium does not natively allow `fetch()` for custom schemes; the library installs a document-start bridge scoped to registered scheme origins and routes those GET/HEAD calls through the same coordinator. `javascript:`, `blob:`, and some built-in file or asset requests do not reach `shouldInterceptRequest`.
+Android does not provide a reliable per-request stop callback from WebView. A running handler may therefore continue until it returns, times out, or the WebView is disposed. Chromium does not natively allow `fetch()` for custom schemes. When the WebView provider supports both `WEB_MESSAGE_LISTENER` and `DOCUMENT_START_SCRIPT`, the library installs a document-start bridge scoped to registered scheme origins and routes those GET/HEAD calls through the same coordinator. If either capability is unavailable, the fetch bridge is skipped: main-frame navigation and static subresources continue through `shouldInterceptRequest`, while JavaScript `fetch()` for registered custom schemes is not supported. `javascript:`, `blob:`, and some built-in file or asset requests do not reach `shouldInterceptRequest`.
 
 iOS maps each `WKURLSchemeTask` to one coordinator request. `stopURLSchemeTask` cancels it and suppresses every later WebKit callback. Releasing the WebView cancels all tasks without sending response, data, finish, or failure callbacks.
 

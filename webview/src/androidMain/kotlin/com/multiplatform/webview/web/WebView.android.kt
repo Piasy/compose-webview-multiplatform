@@ -10,6 +10,7 @@ import com.multiplatform.webview.jsbridge.WebViewJsBridge
 import com.multiplatform.webview.request.AndroidWebViewSchemeAdapter
 import com.multiplatform.webview.request.AndroidWebViewSchemeClient
 import com.multiplatform.webview.request.WebViewSchemeConfig
+import com.multiplatform.webview.request.diagnosticContext
 import com.multiplatform.webview.util.KLogger
 
 /**
@@ -50,6 +51,9 @@ actual fun ActualWebView(
             try {
                 schemeAdapter?.installFetchBridge(webView)
             } catch (throwable: Throwable) {
+                KLogger.e(throwable) {
+                    "operation=custom_scheme_setup stage=failed ${diagnosticContext(webView)}"
+                }
                 runCatching { schemeAdapter?.close() }
                     .onFailure { cleanupFailure ->
                         KLogger.e(cleanupFailure) {
